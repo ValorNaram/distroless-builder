@@ -1,0 +1,6 @@
+filesystem
+*.zip
+*.tar
+*.tar.gz
+.pyc
+distroless_files

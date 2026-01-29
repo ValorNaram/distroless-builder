@@ -1,0 +1,85 @@
+#!/bin/bash
+
+PACKAGE_INSTALL=""
+LIST_OF_APP_PATHS=""
+DESTINATION_FOLDER=""
+
+function usage() {
+  printf "\033[0;31mInvalid or insufficient arguments provided!\n\033[0;m">&2
+  printf "\033[1;37mUSAGE:\033[0;m $0 \033[0;33m--list-of-app-paths=\033[0;m'<arguments to collector>' [\033[0;33m--package-install=\033[0;m'>arguments to apt install>']\n">&2
+  printf "\n">&2
+  printf "--list-of-app-paths='<arguments>'       Arguments to collector python3 script.">&2
+  printf "--package-install='<package names>'  Optional: Arguments to 'apt install -y' to install packages automatically">&2
+  exit 1
+}
+
+for i in "$@"; do
+  case $i in
+    --package-install=*)
+      PACKAGE_INSTALL="${i#*=}"
+      shift
+      ;;
+    --destination-folder=*)
+      DESTINATION_FOLDER="${i#*=}"
+      shift
+      ;;
+    --list-of-app-paths=*)
+			LIST_OF_APP_PATHS="${i#*=}"
+			shift
+			;;
+    *)
+      printf "\033[0;31mUnknown argument: '$i'\033[0;m\n">&2
+      ;;
+  esac
+done
+
+if  [ -z "${LIST_OF_APP_PATHS}" ]; then
+  usage
+fi
+
+# see https://superuser.com/a/1525721
+# echo 'APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/01keep-debs
+# echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' >> /etc/apt/apt.conf.d/01keep-debs
+# echo 'APT::Clean-Installed "false";' > /etc/apt/apt.conf.d/01do-not-clean-installed-debs
+
+printf "\033[0;34mPulling info about apt sources ...\033[0;m\n"
+apt update -y
+printf "\033[0;34mInstalling collector dependencies ...\033[0;m\n"
+apt install -y python3
+
+printf "\033[0;34mInstalling application and its dependencies for analysis ...\033[0;m\n"
+# extract *.deb using ar -> https://www.cyberciti.biz/faq/how-to-extract-a-deb-file-without-opening-it-on-debian-or-ubuntu-linux/
+# apt install -y ${PACKAGE_INSTALL} --download-only
+apt install -y ${PACKAGE_INSTALL}
+
+printf "\033[0;34mPreparing destination of analysis results ...\033[0;m\n"
+
+if ! [ -d "${DESTINATION_FOLDER}" ]; then
+  mkdir -pv "${DESTINATION_FOLDER}"
+fi
+
+LIST_OF_APP_PATHS_ARR=( $LIST_OF_APP_PATHS )
+for app_path in "${LIST_OF_APP_PATHS_ARR[@]}"; do
+  if [ -e "${app_path}" ]; then
+    app_path_dir=$(dirname "${DESTINATION_FOLDER}${app_path}")
+    if ! [ -d "${app_path_dir}" ]; then mkdir -p "${app_path_dir}"; fi
+    printf "\033[0;34mCopying '${app_path}' ...\033[0;m\n"
+    cp -r "$app_path" "${DESTINATION_FOLDER}${app_path}"
+  fi
+done
+
+printf "\033[0;34mAnalyzing application and its dependencies ...\033[0;m\n"
+
+python3 dependency-collector.py ${DESTINATION_FOLDER} ${LIST_OF_APP_PATHS}
+
+if ! [ -d "${DESTINATION_FOLDER}/etc" ]; then
+  mkdir -pv "${DESTINATION_FOLDER}/etc"
+fi
+
+printf "\033[0;34mGenerating passwd file ...\033[0;m\n"
+echo 'root:x:0:0:root:/:/nonexistent'>${DESTINATION_FOLDER}/etc/passwd
+echo 'nonroot:x:1000:1000:nonroot,,,:/nonexistent:/nonexistent'>>${DESTINATION_FOLDER}/etc/passwd
+
+printf "\033[0;34mGenerating group file ...\033[0;m\n"
+echo 'root:x:0:'>${DESTINATION_FOLDER}/etc/group
+echo 'nonroot:x:1000:'>>${DESTINATION_FOLDER}/etc/group

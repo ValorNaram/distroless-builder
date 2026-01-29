@@ -1,0 +1,58 @@
+= Build without worker container
+
+The `distroless-builder` supports performing the _collection step_ on the host where the script runs. This is useful and recommended in cases where the `distroless-builder` already runs in a container e.g.: GitLab pipeline.
+
+== Prerequisites
+
+Setting `USE_CONTAINER=no` runs the tools under the path given in variable `WORKER_CONTAINER_RESOURCE_PATH` on the script host. The default value is `worker_container`. The path must point to a directory and needs to contain a sub directory `tools`. The `tools` sub directory must contain the file `start-collecting` which can be a binary or a simple bash script.
+
+At the end the directory tree is at least:
+
+[source,tree]
+----
+<path to dir>
+  tools
+    start-collecting
+----
+
+
+That executable binary/script must accept the following arguments in the following form:
+
+.CLI-Arguments the executable `start-collecting` must accept
+[source,bash]
+----
+--package-install="<list of packages to install on the host system>" --destination-folder="<path to dest folder where to save app, dependencies and its config files under>" --list-of-app-paths="<space separated list of paths to assume belonging to the app>"
+----
+
+e.g.
+
+.Example:CLI-Arguments the executable `start-collecting` must accept
+[source,bash]
+----
+--package-install="apache2" --destination-folder="/home/nonroot/distroless-builder/distroless_files/apache2/filesystem" --list-of-app-paths="/usr/sbin/apache2 /etc/apache2/ /usr/lib/apache2 /etc/mime.types"
+----
+
+
+These map to configuration variables and or CLI arguments in the following way
+
+.Mapping of config vars/builder CLI arguments to CLI arguments for `start-collecting`
+[%header]
+|===
+a|Argument to `start-collecting`|Config var|CLI argument to builder
+
+a|`--package-install`
+a|`PACKAGE_INSTALL`
+a|`--package-install`
+
+a|`--destination-folder`
+a|`DESTINATION_FOLDER_ON_SCRIPT_HOST`
+a|`--destination-folder-on-script-host`
+
+a|`--list-of-app-paths`
+a|`LIST_OF_APP_PATHS`
+a|`--list-of-app-paths`
+|===
+
+== Where are the collected files
+
+It is expected that the binary/script `start-collecting` stores the collected application binaries, its configuration files and its dependencies under the path specified using `--destination-folder` e.g. `/home/nonroot/distroless-builder/distroless_files/apache2/filesystem`. This path contains all required resources needed to run the app in an isolated environment.

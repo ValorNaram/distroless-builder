@@ -1,0 +1,286 @@
+= Configuration Reference
+
+Written using AI
+
+This document outlines the available configuration variables and their command-line interface (CLI) argument counterparts used to control the script's behavior.
+
+== `USE_CONTAINERS` / `--use-containers`
+
+Controls the execution environment of the pipeline. It determines whether operations (building, collecting) happen inside an isolated container or directly on the host system.
+
+* *Possible Values:*
+** `yes`: Execute the pipeline inside a container.
+** `no`: Execute the pipeline on the host system.
+* *Default Value:* `yes`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --use-containers=no
+./distroless-builder.sh --use-containers=yes
+----
+
+.Configuration File Examples
+[source,bash]
+----
+USE_CONTAINERS="no"
+USE_CONTAINERS="yes"
+----
+
+== `CONTAINER_MANAGEMENT_CLI` / `--container-management-cli`
+
+Specifies the Docker-compatible interface used for managing containers (create, start, exec, stop, rm) and images (build). This is only relevant if `USE_CONTAINERS` is set to `yes`.
+
+* *Possible Values:* `podman`, `docker`, or any compatible binary name.
+* *Default Value:* `podman`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --container-management-cli=docker
+./distroless-builder.sh --container-management-cli=/usr/bin/podman
+----
+
+.Configuration File Examples
+[source,bash]
+----
+CONTAINER_MANAGEMENT_CLI="docker"
+CONTAINER_MANAGEMENT_CLI="podman"
+----
+
+== `WORKER_CONTAINER_IMAGE_SOURCE` / `--worker-container-image-source`
+
+Determines the strategy for acquiring the worker container image. This is only relevant if `USE_CONTAINERS` is set to `yes`.
+
+* *Possible Values:*
+** `build`: Builds the image from the source located at `WORKER_CONTAINER_RESOURCE_PATH`.
+** `pull`: Downloads the image from a registry instead of building it.
+** `local`: Assumes the image exists locally and uses it without attempting to build or pull.
+* *Default Value:* `build`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --worker-container-image-source=pull
+./distroless-builder.sh --worker-container-image-source=local
+----
+
+.Configuration File Examples
+[source,bash]
+----
+WORKER_CONTAINER_IMAGE_SOURCE="pull"
+WORKER_CONTAINER_IMAGE_SOURCE="local"
+----
+
+== `WORKER_CONTAINER_IMAGE_BUILD_USE_BASE_IMAGE` / `--worker-container-image-build-use-base-image`
+
+Sets the base image used during the build process of the worker container. This is passed as a build argument (`BASE_IMAGE`) to the container build command. This is only relevant if `WORKER_CONTAINER_IMAGE_SOURCE` is set to `build`.
+
+* *Possible Values:* Any valid container image reference (e.g., `debian:12`, `ubuntu:latest`).
+* *Default Value:* `docker.io/library/debian:12`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --worker-container-image-build-use-base-image=ubuntu:22.04
+./distroless-builder.sh --worker-container-image-build-use-base-image=alpine:latest
+----
+
+.Configuration File Examples
+[source,bash]
+----
+WORKER_CONTAINER_IMAGE_BUILD_USE_BASE_IMAGE="ubuntu:22.04"
+WORKER_CONTAINER_IMAGE_BUILD_USE_BASE_IMAGE="alpine:latest"
+----
+
+== `WORKER_CONTAINER_IMAGE_NAME` / `--worker-container-image-name`
+
+Defines the image repository name to be used or created for the pipeline. The image must contain all necessary dependencies (e.g., python3) to execute the scripts.
+
+* *Possible Values:* A valid image name string.
+* *Default Value:* `localhost/distroless-builder`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --worker-container-image-name=my-builder
+./distroless-builder.sh --worker-container-image-name=registry.example.com/builder
+----
+
+.Configuration File Examples
+[source,bash]
+----
+WORKER_CONTAINER_IMAGE_NAME="my-project-builder"
+WORKER_CONTAINER_IMAGE_NAME="company/internal-tool"
+----
+
+== `WORKER_CONTAINER_IMAGE_TAG` / `--worker-container-image-tag`
+
+Defines the tag for the image specified in `WORKER_CONTAINER_IMAGE_NAME`.
+
+* *Possible Values:* A valid image tag string (e.g., `latest`, `v1.0`).
+* *Default Value:* `latest`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --worker-container-image-tag=v2.0
+./distroless-builder.sh --worker-container-image-tag=stable
+----
+
+.Configuration File Examples
+[source,bash]
+----
+WORKER_CONTAINER_IMAGE_TAG="v1.5"
+WORKER_CONTAINER_IMAGE_TAG="dev"
+----
+
+== `WORKER_CONTAINER_ALWAYS_RECREATE` / `--worker-container-always-recreate`
+
+Controls whether to force the recreation of the worker container even if a container with the same name already exists. Note that the script may automatically override this to `yes` if it detects the underlying image digest has changed.
+
+* *Possible Values:*
+** `yes`: Always remove and recreate the container.
+** `no`: Reuse the existing container if valid.
+* *Default Value:* `no`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --worker-container-always-recreate=yes
+./distroless-builder.sh --worker-container-always-recreate=no
+----
+
+.Configuration File Examples
+[source,bash]
+----
+WORKER_CONTAINER_ALWAYS_RECREATE="yes"
+WORKER_CONTAINER_ALWAYS_RECREATE="no"
+----
+
+== `WORKER_CONTAINER_NAME` / `--worker-container-name`
+
+Sets the runtime name of the worker container instance. This is the name used to start, stop, and execute commands within the container.
+
+* *Possible Values:* A valid container name string.
+* *Default Value:* `distroless-builder`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --worker-container-name=builder-instance-1
+./distroless-builder.sh --worker-container-name=ci-runner
+----
+
+.Configuration File Examples
+[source,bash]
+----
+WORKER_CONTAINER_NAME="my-container"
+WORKER_CONTAINER_NAME="job-123"
+----
+
+== `WORKER_CONTAINER_RESOURCE_PATH` / `--worker-container-resource-path`
+
+Specifies the file system path to the directory containing the resources required to build the worker container (specifically the `Containerfile`). This directory serves as the build context. Only used if `WORKER_CONTAINER_IMAGE_SOURCE` is `build`.
+
+* *Possible Values:* A relative or absolute path to a directory.
+* *Default Value:* `worker_container`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --worker-container-resource-path=./docker-context
+./distroless-builder.sh --worker-container-resource-path=/opt/builder/resources
+----
+
+.Configuration File Examples
+[source,bash]
+----
+WORKER_CONTAINER_RESOURCE_PATH="docker"
+WORKER_CONTAINER_RESOURCE_PATH="../container-files"
+----
+
+== `REMOVE_WORKER_CONTAINER_AT_END` / `--remove-worker-container-at-end`
+
+Determines if the worker container should be removed after the script finishes execution. If set to `no`, the container is stopped but persists.
+
+* *Possible Values:*
+** `yes`: Remove the container.
+** `no`: Keep the container.
+* *Default Value:* `yes`
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --remove-worker-container-at-end=no
+./distroless-builder.sh --remove-worker-container-at-end=yes
+----
+
+.Configuration File Examples
+[source,bash]
+----
+REMOVE_WORKER_CONTAINER_AT_END="no"
+REMOVE_WORKER_CONTAINER_AT_END="yes"
+----
+
+== `PACKAGE_INSTALL` / `--package-install`
+
+A space-separated list of packages to install via the package manager inside the worker container.
+
+* *Possible Values:* A string containing package names (e.g., `"apache2 php-cli"`).
+* *Default Value:* `""` (Empty string)
+
+.CLI Argument Examples
+[source,bash]
+----
+./distroless-builder.sh --package-install="nginx curl git"
+./distroless-builder.sh --package-install="python3-pip"
+----
+
+.Configuration File Examples
+[source,bash]
+----
+PACKAGE_INSTALL="vim htop"
+PACKAGE_INSTALL="apache2 libapache2-mod-php"
+----
+
+== `LIST_OF_APP_PATHS` / `--list-of-app-paths`
+
+A space-separated list of application paths to collect. The collector uses these paths to identify application files and dependencies installed by the package manager.
+
+* *Possible Values:* A string containing absolute paths (e.g., `"/usr/sbin/apache2 /etc/php"
+
+== DIRECTORY_OF_CONFIG_FILE / (None)
+
+A helper variable available only within a configuration file. It contains the path to the directory where the currently loaded configuration file is located. This is useful for referencing other files relative to the configuration file location.
+
+* *Possible Values:* Absolute directory path string.
+* *Default Value:* (Dynamically set during execution)
+
+.CLI Argument Examples
+[source,bash]
+----
+# N/A - This is a read-only variable dynamically set during config loading.
+----
+
+.Configuration File Examples
+[source,bash]
+----
+# specify target folder of the app files for the isolated filesystem
+DESTINATION_FOLDER_ON_SCRIPT_HOST="${DIRECTORY_OF_CONFIG_FILE}/filesystem"
+----
+
+== CONFIG_FILE_PATH / (None)
+
+A helper variable available only within a configuration file. It contains the full path to the configuration file currently being read.
+
+* *Possible Values:* Absolute file path string.
+* *Default Value:* (Dynamically set during execution)
+
+.CLI Argument Examples
+[source,bash]
+----
+# N/A - This is a read-only variable dynamically set during config loading.
+----
+
+There is no example available showing its possible use inside a configuration file. You are free to open an issue if you have an idea how to fill this documentation gap.

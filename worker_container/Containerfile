@@ -1,0 +1,7 @@
+ARG BASE_IMAGE="docker.io/library/debian:12"
+
+FROM ${BASE_IMAGE} AS worker
+
+COPY tools /
+
+ENTRYPOINT ["bash", "/pause.sh"]

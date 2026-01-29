@@ -1,0 +1,87 @@
+= Creating your own worker container image
+
+The collection of the application, its configuration files and its dependencies is the messy step. The script allows to perform these steps in a worker container to keep the host system clean. It is the responsibility of the worker image to contain all the necessary tools needed for collection.
+
+:sectnums:
+:sectnumlevels: 3
+
+== What must be inside the image
+
+The image to be used for a worker container must contain the following:
+
+* A Bash shell
+* A entrypoint which does nothing except listening for process signals
+* An executable file at path `/start-collecting`.
+
+These requirements are described in more detail below.
+
+=== Bash Shell
+
+The container needs to contain a Bash shell. The script will execute commands invoking the Bash.
+
+=== `pause`-Entrypoint
+
+The image needs to point to an entrypoint which is waiting for process signals `SIGTERM`, `SIGINT`, `SIGABRT` and `SIGHUP`. Upon receiving one of those signals it must exist allowing the container to be stopped gracefully.
+
+See link:../worker_container/tools/pause.sh[worker_container/tools/pause.sh] for a working example.
+
+=== Executable file at path `/start-collecting`
+
+There must be an executable file at path `/start-collecting`. It needs to be capable to work with arguments of the following form:
+
+[source,bash]
+----
+--package-install="<content>" --destination-folder="<content>" --list-of-app-paths="<content>"`
+----
+
+e.g.
+
+[source,bash]
+----
+--package-install="apache2" --destination-folder="/dest" --list-of-app-paths="/usr/sbin/apache2 /etc/apache2/ /usr/lib/apache2 /etc/mime.types"`
+----
+
+The executable `/start-collecting` is responsible of collecting the app, its dependencies and configuration files inside a directory given in argument `--destination-folder`. It is responsible of storing the files under a meaningful path underneath the destination folder as that represents the chroot directory of the app. By definition a chroot directory needs to contain everything needed to run the app within isolated from the outer filesystem.
+
+See link:../worker_container/tools/start-collecting[worker_container/tools/start-collecting] for how this is implemented by default.
+
+The script on the host will copy the contents of the destination folder from the container to the host at the very end of its execution. The path on the script host is controlled by the value of the `DESTINATION_FOLDER_ON_SCRIPT_HOST` configuration variable or its CLI counterpart `--destination-folder-on-script-host=path/on/script/host`.
+
+== Creating the worker container
+
+Use a `Containerfile` and your favourite container orchestrator to build the image to be used as worker container. See link:../worker_container/Containerfile[worker_container/Containerfile] how the default image is build.
+
+Once you created a `Containerfile` you can use it to build the image.
+
+.Image build using `podman`
+[source,bash]
+----
+podman build --tag 'localhost/distroless-builder/name-of-your-own-worker-container-image:latest' --file '/path/to/your/own/Containerfile'
+----
+
+This project shows the build using `podman` but `docker` or pure `buildah` will also work. Change the tag to what you prefer as the given value is just an example.
+
+== Using your own image
+
+Now we just need to tell `distroless-builder` to use it. Add or change your configuration file you use to build a distroless image e.g. `apache2` to contain the following:
+
+.Configuration needed to use a pre-build and locally cached container image
+[source,bash]
+----
+WORKER_CONTAINER_IMAGE_SOURCE="local"
+WORKER_CONTAINER_IMAGE_NAME="localhost/distroless-builder/name-of-your-own-worker-container-image"
+WORKER_CONTAINER_IMAGE_TAG="latest"
+----
+
+Replace the values for `WORKER_CONTAINER_IMAGE_NAME` and `WORKER_CONTAINER_IMAGE_TAG` to the ones you chose on image build.
+
+.CLI params needed to use a pre-build and locally cached container image
+[source,bash]
+----
+--worker-container-image-source="local" \ --worker-container-image-name="localhost/distroless-builder/name-of-your-own-worker-container-image" \ 
+--worker-container-image-tag="latest"
+----
+
+Replace the values for `--worker-container-image-name` and `--worker-container-image-tag` to the ones you chose on image build.
+
+:!sectnums:
