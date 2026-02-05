@@ -4,6 +4,8 @@ Democratizing distroless container builds: A simple builder to simplify and expl
 
 Isolated environments only contain the resources needed by the application to run and nothing else. This makes it harder for hackers to exploit the running system and therefore minimizes the possible attack vector. In order to create an isolated environment where the app actually runs, it is required to collect all resources (dependencies) needed by the app. This is where this builder comes into play: It automates the collection of the dependencies and explains how it was done so you completely understand what the automation did.
 
+See link:./ToDo.adoc[ToDo list] if you want to contribute.
+
 == Quickstarts
 
 Quickstarts help you to get up and running with your own version of a distroless image for a particular application where we provide configuration templates for. The quickstarts do not require a understanding of the concepts here and are merely here for you to get up and running quickly.

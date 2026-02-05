@@ -1,0 +1,7 @@
+= ToDo
+
+This list shows what is to do. Create an issue so we can talk to each other.
+
+.Things to do
+* Creating a tutorial how to collect app, its configuration files and all its system dependencies manually without automation.
+* Creating more configurations for applications to distroless https://github.com/ValorNaram/distroless_files[distroless-files].
