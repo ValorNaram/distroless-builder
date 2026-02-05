@@ -1,0 +1,33 @@
+= distroless-builder
+
+Democratizing distroless container builds: A simple builder to simplify and explain the process on how to get all required resources needed to run an application in an isolated environment.
+
+Isolated environments only contain the resources needed by the application to run and nothing else. This makes it harder for hackers to exploit the running system and therefore minimizes the possible attack vector. In order to create an isolated environment where the app actually runs, it is required to collect all resources (dependencies) needed by the app. This is where this builder comes into play: It automates the collection of the dependencies and explains how it was done so you completely understand what the automation did.
+
+**Currently there is no release. Development happens in branch `develop`.**
+
+== Concepts
+
+It is important to know the following when using this project.
+
+=== Configuration file
+
+The configuration file contains the configuration items needed in order to know what app should be analyzed and gives some hints about locations where to assume those binaries are needed by the app. Using the default setup of the script, these two information are enough to collect the app and its dependencies.
+
+The configuration file can also be used to tell the script to behave differently aside the default.
+
+It can be anywhere on the filesystem.
+
+=== Worker container
+
+By default, the collection of the application, its configuration files and its dependencies happen all in a container. This is the so-called "worker container". This allows us to do things without messing up the host system the script runs on.
+
+The scripts provides a default worker container configuration which installs the application using APT you want to create a distroless image of, copies the application and the configuration files of the application to a destination folder. Then it calls a python3 script in charge of retrieving all the dependencies the application needs and putting them into the appropriate locations under the destination folder.
+
+The worker container saves its output - the destination folder - inside of itself which the script copies over to a location on the host system specified by the configuration file.
+
+=== Collection step
+
+The process of collecting the application, its configuration files and its dependencies is called "collection step". At the end of it, we have everything needed to create a distroless container image.
+
+By default this step is run completely in a worker container. This is the recommended step to not mess up with the host system the `distroless-builder` runs on. But the builder can be configured to run it on the host system too.
