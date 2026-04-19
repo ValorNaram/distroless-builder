@@ -23,7 +23,7 @@ The container needs to contain a Bash shell. The script will execute commands in
 
 The image needs to point to an entrypoint which is waiting for process signals `SIGTERM`, `SIGINT`, `SIGABRT` and `SIGHUP`. Upon receiving one of those signals it must exist allowing the container to be stopped gracefully.
 
-See link:../worker_container/tools/pause.sh[worker_container/tools/pause.sh] for a working example.
+See link:../collector_resources/tools/pause.sh[collector_resources/tools/pause.sh] for a working example.
 
 === Executable file at path `/start-collecting`
 
@@ -43,13 +43,13 @@ e.g.
 
 The executable `/start-collecting` is responsible of collecting the app, its dependencies and configuration files inside a directory given in argument `--destination-folder`. It is responsible of storing the files under a meaningful path underneath the destination folder as that represents the chroot directory of the app. By definition a chroot directory needs to contain everything needed to run the app within isolated from the outer filesystem.
 
-See link:../worker_container/tools/start-collecting[worker_container/tools/start-collecting] for how this is implemented by default.
+See link:../collector_resources/tools/start-collecting[collector_resources/tools/start-collecting] for how this is implemented by default.
 
 The script on the host will copy the contents of the destination folder from the container to the host at the very end of its execution. The path on the script host is controlled by the value of the `DESTINATION_FOLDER_ON_SCRIPT_HOST` configuration variable or its CLI counterpart `--destination-folder-on-script-host=path/on/script/host`.
 
 == Creating the worker container
 
-Use a `Containerfile` and your favourite container orchestrator to build the image to be used as worker container. See link:../worker_container/Containerfile[worker_container/Containerfile] how the default image is build.
+Use a `Containerfile` and your favourite container orchestrator to build the image to be used as worker container. See link:../collector_resources/Containerfile[collector_resources/Containerfile] how the default image is build.
 
 Once you created a `Containerfile` you can use it to build the image.
 

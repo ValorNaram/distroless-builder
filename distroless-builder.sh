@@ -8,6 +8,9 @@
 # The values defined in the latter overwrite the values in the previous config files
 CONFIGURATION_FILES=( )
 
+# Absolute path of the directory containing this script
+DISTROLESS_BUILDER_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") &>/dev/null && pwd)
+
 # Execute each pipeline in a container and not on the host system executing this script.
 USE_CONTAINERS="yes"
 # Docker compatible interface for managing containers (create, start, exec, stop, rm) and container images (build). Useful only if 'USE_CONTAINERS=yes'.
@@ -33,7 +36,7 @@ WORKER_CONTAINER_ALWAYS_RECREATE="no"
 WORKER_CONTAINER_NAME="distroless-builder"
 # Path to directory where to find the resources needed to build the worker container. Useful only if 'WORKER_CONTAINER_IMAGE_SOURCE=build' and 'USE_CONTAINER=yes' are set.
 # The directory must contain a 'Containerfile' and needs to be the container context at the same time. Used as building context if 'WORKER_CONTAINER_IMAGE_SOURCE=build' and 'USE_CONTAINER=yes' are set.
-WORKER_CONTAINER_RESOURCE_PATH="worker_container"
+COLLECTOR_RESOURCE_PATH="${DISTROLESS_BUILDER_DIR}/collector_resources"
 
 # Stop but do not remove container at the end. Useful only if 'USE_CONTAINER=yes' is set.
 # Values: yes|no
@@ -50,8 +53,12 @@ LIST_OF_APP_PATHS=""
 
 # Destination folder in worker container where the collector shall save the app and its resources to inside the container for pickup by this script. Useful only if 'USE_CONTAINER=yes' is set.
 DESTINATION_FOLDER_IN_WORKER_CONTAINER="/dest"
-# Destination folder on script host where to copy the collected resources needed to run the app.
+# Destination folder on script host where to copy the collected resources to needed to run the app.
+# By default it assumes the folder 'distroless_files' to exist in the current working directory.
 DESTINATION_FOLDER_ON_SCRIPT_HOST="distroless_files"
+
+# Source folder on script host containing directories and files to copy inside the container.
+SOURCE_FOLDER_ON_SCRIPT_HOST=""
 
 # Optional parameter. Array of idempotent custom commands to execute before the application resources including the dependencies will be collected. These commands are being executed in the working directory of the destination folder.
 # If `USE_CONTAINER=yes` is set, then these commands are being executed in the container.
@@ -60,7 +67,7 @@ CUSTOM_COMMANDS_BEFORE_COLLECTION=()
 
 # Optional parameter. Array of idempotent custom commands to execute after all application resources including dependencies have been collected. These commands are being executed in the working directory of the destination folder.
 # If `USE_CONTAINER=yes` is set, then these commands are being executed in the container.
-# If `USE_CONTAINER=no` is set, then these commands are being executed on the script host
+# If `USE_CONTAINER=no` is set, then these commands are being executed on the script host.
 CUSTOM_COMMANDS_AFTER_COLLECTION=()
 
 # Can only be used from inside a configuration file: Path to the directory containing the currently loaded configuration file.
@@ -87,7 +94,7 @@ if [ "${#CONFIGURATION_FILES[@]}" -gt 0 ]; then
 			exit 1
 		fi
 		printf "\033[0;33mSourcing configuration file '${CONFIG_FILE_PATH}'\033[0;m ...\n"
-		DIRECTORY_OF_CONFIG_FILE=$(dirname "${CONFIG_FILE_PATH}")
+		DIRECTORY_OF_CONFIG_FILE=$(cd $(dirname "${CONFIG_FILE_PATH}") &>/dev/null && pwd)
 		source "${CONFIG_FILE_PATH}"
 		DIRECTORY_OF_CONFIG_FILE=""
 	done
@@ -96,15 +103,17 @@ fi
 
 for i in "$@"; do
 	case $i in
-		# check for this CLI argument at this stage of the script too to prevent the script to complain about
-		# Unknown argument: `--configuration-file=[...]`
-		# as this would confuse users and won't be true.
+		# check for this CLI argument at this stage of the script too for the following reasons:
+		# 1. Prevents the script to complain about Unknown argument: `--configuration-file=[...]` as this would confuse users and won't be true
+		# 2. Ensures the script properly discards that argument in order to be able process further ones.
+		# 
 		--configuration-file=*)
 			shift
 			;;
 		--config-file=*)
 			shift
 			;;
+
 		--use-containers=*)
 			USE_CONTAINERS="${i#*=}"
 			shift
@@ -137,8 +146,8 @@ for i in "$@"; do
 			WORKER_CONTAINER_NAME="${i#*=}"
 			shift
 			;;
-		--worker-container-resource-path=*)
-			WORKER_CONTAINER_RESOURCE_PATH="${i#*=}"
+		--collector-resource-path=*)
+			COLLECTOR_RESOURCE_PATH="${i#*=}"
 			shift
 			;;
 		--remove-worker-container-at-end=*)
@@ -161,6 +170,10 @@ for i in "$@"; do
 			DESTINATION_FOLDER_ON_SCRIPT_HOST="${i#*=}"
 			shift
 			;;
+		--source-folder-on-script-host=*)
+			SOURCE_FOLDER_ON_SCRIPT_HOST="${i#*=}"
+			shift
+			;;
 		*)
 			printf "\033[0;31mUnknown argument: \`$i\`, ignoring it ...\033[0;m\n">&2
 			shift
@@ -172,7 +185,7 @@ done
 
 function usage() {
 	printf "\033[0;31mInvalid or insufficient arguments provided!\n\033[0;m">&2
-	printf "\033[1;37mUSAGE:\033[0;m $0 \033[0;33m--package-install=\033[0;m'>arguments to apt install>' \033[0;33m--list-of-app-paths=\033[0;m'<arguments to collector>'\n">&2
+	# printf "\033[1;37mUSAGE:\033[0;m $0 \033[0;33m--package-install=\033[0;m'>arguments to apt install>' \033[0;33m--list-of-app-paths=\033[0;m'<arguments to collector>'\n">&2
 	exit 1
 }
 
@@ -191,7 +204,7 @@ function clean_up() {
 }
 
 function signal_handler() {
-	printf "\033[1;31mHandling exit signal ...\033[0;m\n"
+	printf "\n\033[1;31mHandling exit signal ...\033[0;m\n"
 	clean_up
 	exit 0
 
@@ -260,18 +273,18 @@ if [ "${USE_CONTAINERS}" == "yes" ]; then
 
 	if [ "${WORKER_CONTAINER_IMAGE_SOURCE}" == "build" ]; then
 		printf "\033[0;34mBuilding container image for worker container ...\033[0;m\n"
-		current_image_digest=$(${CONTAINER_MANAGEMENT_CLI} build --quiet --tag "${WORKER_CONTAINER_IMAGE_NAME}:${WORKER_CONTAINER_IMAGE_TAG}" --file "${WORKER_CONTAINER_RESOURCE_PATH}/Containerfile" --build-arg "BASE_IMAGE=${WORKER_CONTAINER_IMAGE_BUILD_USE_BASE_IMAGE}" "${WORKER_CONTAINER_RESOURCE_PATH}")
+		current_image_digest=$(${CONTAINER_MANAGEMENT_CLI} build --quiet --tag "${WORKER_CONTAINER_IMAGE_NAME}:${WORKER_CONTAINER_IMAGE_TAG}" --file "${COLLECTOR_RESOURCE_PATH}/Containerfile" --build-arg "BASE_IMAGE=${WORKER_CONTAINER_IMAGE_BUILD_USE_BASE_IMAGE}" "${COLLECTOR_RESOURCE_PATH}")
+	fi
 
-		if [ -n "${container_exists}" ] && [ "${WORKER_CONTAINER_ALWAYS_RECREATE}" == "no" ]; then
-			container_built_with_image_digest=$(podman container inspect "${WORKER_CONTAINER_NAME}" | jq -cr '.[0].Image')
-			if [ "${current_image_digest}" == "${container_built_with_image_digest}" ]; then
-				printf "\033[1;33mExplanation:\033[0;33m The container with name '${WORKER_CONTAINER_NAME}' is not going to be recreated as a container with that name exists already and is not outdated."
-			else
-					printf "\033[1;33mExplanation:\033[0;33m The container with name '${WORKER_CONTAINER_NAME}' is going to be recreated as its outdated due to an image update."
-				WORKER_CONTAINER_ALWAYS_RECREATE="yes"
-			fi
-			printf " Set 'WORKER_CONTAINER_ALWAYS_RECREATE' to 'yes' to always force container recreation even when the container is up to date.\033[0;m\n"
+	if [ -n "${container_exists}" ] && [ "${WORKER_CONTAINER_ALWAYS_RECREATE}" == "no" ]; then
+		container_built_with_image_digest=$(podman container inspect "${WORKER_CONTAINER_NAME}" | jq -cr '.[0].Image')
+		if [ "${current_image_digest}" == "${container_built_with_image_digest}" ]; then
+			printf "\033[1;33mExplanation:\033[0;33m The container with name '${WORKER_CONTAINER_NAME}' is not going to be recreated as a container with that name exists already and is not outdated."
+		else
+			printf "\033[1;33mExplanation:\033[0;33m The container with name '${WORKER_CONTAINER_NAME}' is going to be recreated as its outdated due to an image update."
+			WORKER_CONTAINER_ALWAYS_RECREATE="yes"
 		fi
+		printf " Set 'WORKER_CONTAINER_ALWAYS_RECREATE' to 'yes' to always force container recreation even when the container is up to date.\033[0;m\n"
 	fi
 
 	if [ -z "${container_exists}" ]; then
@@ -286,6 +299,12 @@ if [ "${USE_CONTAINERS}" == "yes" ]; then
 	printf "\033[0;34mStarting worker container ...\033[0;m\n"
 	${CONTAINER_MANAGEMENT_CLI} start "${WORKER_CONTAINER_NAME}"
 	die_or_continue
+
+	if [ -n "${SOURCE_FOLDER_ON_SCRIPT_HOST}" ]; then
+		printf "\033[0;34mCopying source files to container ...\033[0;m\n"
+		${CONTAINER_MANAGEMENT_CLI} cp "${SOURCE_FOLDER_ON_SCRIPT_HOST}/." "${WORKER_CONTAINER_NAME}:/source"
+	die_or_continue
+	fi
 fi
 
 # !! Testable block: Custom command execution before collect step
@@ -295,17 +314,22 @@ if [ -n "${#CUSTOM_COMMANDS_BEFORE_COLLECTION[@]}" ] && [ "${#CUSTOM_COMMANDS_BE
 		custom_command_execution "${CUSTOM_COMMANDS_BEFORE_COLLECTION[@]}"
 fi
 
-
 # !! Testable block: Collect step
 
 printf "\033[1;34mStep: Collect application and its dependencies.\033[0;m\n"
+
+COLLECTOR_SCRIPT_OPTIONAL_ARGS=""
+if [ -n "${PACKAGE_INSTALL}" ]; then
+	COLLECTOR_SCRIPT_OPTIONAL_ARGS="--package-install=${PACKAGE_INSTALL}"
+fi
+
 if [ "${USE_CONTAINERS}" == "yes" ]; then
-	${CONTAINER_MANAGEMENT_CLI} exec "${WORKER_CONTAINER_NAME}" ./start-collecting --package-install="${PACKAGE_INSTALL}" --destination-folder="${DESTINATION_FOLDER_IN_WORKER_CONTAINER}" --list-of-app-paths="${LIST_OF_APP_PATHS}"
+	${CONTAINER_MANAGEMENT_CLI} exec "${WORKER_CONTAINER_NAME}" ./start-collecting "${COLLECTOR_SCRIPT_OPTIONAL_ARGS}" --destination-folder="${DESTINATION_FOLDER_IN_WORKER_CONTAINER}" --list-of-app-paths="${LIST_OF_APP_PATHS}"
 	die_or_continue
 else
 	(
-	cd ${WORKER_CONTAINER_RESOURCE_PATH}/tools
-	start-collecting --package-install="${PACKAGE_INSTALL}" --destination-folder="${DESTINATION_FOLDER_ON_SCRIPT_HOST}" --list-of-app-paths="${LIST_OF_APP_PATHS}"
+	cd ${COLLECTOR_RESOURCE_PATH}/tools
+	start-collecting "${COLLECTOR_SCRIPT_OPTIONAL_ARGS}" --destination-folder="${DESTINATION_FOLDER_ON_SCRIPT_HOST}" --list-of-app-paths="${LIST_OF_APP_PATHS}"
 	)
 	die_or_continue
 fi

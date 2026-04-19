@@ -3,4 +3,4 @@ filesystem
 *.tar
 *.tar.gz
 .pyc
-distroless_files
+distroless_files/

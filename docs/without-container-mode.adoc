@@ -4,7 +4,7 @@ The `distroless-builder` supports performing the _collection step_ on the host w
 
 == Prerequisites
 
-Setting `USE_CONTAINER=no` runs the tools under the path given in variable `WORKER_CONTAINER_RESOURCE_PATH` on the script host. The default value is `worker_container`. The path must point to a directory and needs to contain a sub directory `tools`. The `tools` sub directory must contain the file `start-collecting` which can be a binary or a simple bash script.
+Setting `USE_CONTAINER=no` runs the tools under the path given in variable `COLLECTOR_RESOURCE_PATH` on the script host. The default value is `collector_resources`. The path must point to a directory and needs to contain a sub directory `tools`. The `tools` sub directory must contain the file `start-collecting` which can be a binary or a simple bash script.
 
 At the end the directory tree is at least:
 
